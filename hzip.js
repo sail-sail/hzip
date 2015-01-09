@@ -1,13 +1,32 @@
 var fs = require("fs");
-var crc = require("./crc32");
 var zlib = require("zlib");
-var BufferExt = require("./BufferExt");
+var crc = undefined;
+try {
+	crc = require("crc32");
+} catch(err) {
+	crc = require("./crc32");
+}
+var BufferExt = undefined;
+try {
+	BufferExt = require("BufferExt");
+} catch(err) {
+	BufferExt = require("./BufferExt");
+}
+var encoding = undefined;
+try {
+	encoding = require("encoding");
+} catch(err) {
+	encoding = require("./encoding");
+}
 
 //sail,2012-09-26
-var Hzip = function(buffer){
+var Hzip = function(buffer,pathEncode){
 	var t = this;
 	t.buffer = buffer;
 	t.getEntries();
+	t.pathEncode = pathEncode || "GBK";
+	if(t.pathEncode === "utf8") t.pathEncode = "UTF-8";
+	if(t.pathEncode === "gbk") t.pathEncode = "GBK";
 };
 Hzip.prototype.getEntries = function() {
 	var t = this;
@@ -143,7 +162,8 @@ Hzip.prototype.getEntry0304 = function(tmp,entry){
 	entry.extraFieldSize = buffer.slice(tmp,tmp+2).readInt16LE(0);
 	tmp += 2;
 	//31~30+entry.fileNameSize文件名
-	entry.fileName = buffer.slice(tmp,tmp+entry.fileNameSize).toString();
+	entry.fileName = buffer.slice(tmp,tmp+entry.fileNameSize);
+	entry.fileName = encoding.convert(entry.fileName,"UTF-8",t.pathEncode).toString();
 	tmp += entry.fileNameSize;
 	//30+fileNameSize~30+fileNameSize+extraFieldSize扩展段
 	var b20a2 = buffer.slice(tmp,tmp+2);
@@ -177,9 +197,11 @@ Hzip.prototype.getEntry = function(fileName,type){
 };
 //更新或者增加entry之后,要重新设置0102和0506
 Hzip.prototype.zip = function(fileComment,comment) {
+	var t = this;
 	fileComment = fileComment || "";
 	comment = comment || "";
-	var t = this;
+	comment = encoding.convert(comment,t.pathEncode,"UTF-8");
+	fileComment = encoding.convert(fileComment,t.pathEncode,"UTF-8");
 	t.getEntries();
 	var entries0102 = [];
 	for(var i=0; i<t.entries.length; i++) {
@@ -242,12 +264,14 @@ Hzip.prototype.zip = function(fileComment,comment) {
 		entry0102.writeInt32LE(entry.begin,42);
 		//46	n	File name
 		var fileNameBuf = new Buffer(entry.fileName);
+		fileNameBuf = encoding.convert(fileNameBuf,t.pathEncode,"UTF-8");
 		for(var j=0; j<n; j++) {
 			entry0102[46+j] = fileNameBuf[j];
 		}
 		//46+n	m	Extra field
 		//46+n+m	k	File comment
 		var fileCommentBuf = new Buffer(fileComment);
+		fileCommentBuf = encoding.convert(fileCommentBuf,t.pathEncode,"UTF-8");
 		for(var j=0; j<k; j++) {
 			entry0102[46+n+m+j] = fileCommentBuf[j];
 		}
@@ -312,10 +336,27 @@ Hzip.prototype.zip = function(fileComment,comment) {
 	t.buffer = buffer1;
 	t.getEntries();
 };
-//更新zip压缩包里面的文件filename
-Hzip.prototype.updateEntry = function(fileName,fileBuf,callback){
+Hzip.prototype.removeEntry = function(fileName){
 	var t = this;
-	t.toEntryBuf(fileName,fileBuf,function(err,buf){
+	var entry = t.getEntry(fileName);
+	if(entry !== undefined && entry !== null) {
+		t.buffer = BufferExt.replaceBuf(entry.begin,entry.end,t.buffer);
+		t.zip();
+	}
+};
+//更新zip压缩包里面的文件filename
+Hzip.prototype.updateEntry = function(fileName,fileBuf,isDefRaw,callback){
+	var t = this;
+	if(callback === undefined && typeof isDefRaw === "function") callback = isDefRaw;
+	if(fileBuf === undefined || fileBuf === null) {
+		t.removeEntry(fileName);
+		if(callback) callback(null,t.buffer);
+		return;
+	}
+	if(!Buffer.isBuffer(fileBuf)) {
+		fileBuf = new Buffer(fileBuf);
+	}
+	t.toEntryBuf(fileName,fileBuf,isDefRaw,function(err,buf){
 		var entry = t.getEntry(fileName);
 		var begin = 0;
 		var end = 0;
@@ -328,26 +369,38 @@ Hzip.prototype.updateEntry = function(fileName,fileBuf,callback){
 		if(callback) callback(err,t.buffer);
 	});
 };
-Hzip.prototype.toEntryBuf = function(fileName,fileBuf,callback){
+//isDefRaw 是否压缩,默认压缩,sail 2014-01-13
+Hzip.prototype.toEntryBuf = function(fileName,fileBuf,isDefRaw,callback){
+	var t = this;
 	var c32Num = crc.crc32(fileBuf);
 	var fileLength = fileBuf.length;
 	if(!Buffer.isBuffer(fileName)) fileName = new Buffer(fileName);
-	zlib.deflateRaw(fileBuf,function(err,cfile){
+	fileName = encoding.convert(fileName,t.pathEncode,"UTF-8");
+	var tmpFn = function(err,cfile){
 		var eb = new Buffer(30+fileName.length+cfile.length);
 		eb[0] = 0x50;
 		eb[1] = 0x4B;
 		eb[2] = 0x03;
 		eb[3] = 0x04;
-		//4~5解压缩所需版本(\x14\x00)
-		eb[4] = 0x14;
-		eb[5] = 0x00;
-		//6~7通用比特标志位(置比特0位=加密;置比特1位=使用压缩方式6,并使用8k变化目录,否则使用4k变化目录;置比特2位=使用压缩方式6,并使用3个ShannonFano树对变化目录输出编码,否则使用2个ShannonFano树对变化目录输出编码,其它比特位未用)  
-		//(\x00\x00)
-		eb[6] = 0x06;
-		eb[7] = 0x00;
-		//8~9解压缩所需版本(\x08\x00)
-		eb[8] = 0x08;
-		eb[9] = 0x00;
+		if(isDefRaw !== false) {
+			//4~5解压缩所需版本(\x14\x00)
+			eb[4] = 0x14;
+			eb[5] = 0x00;
+			//6~7通用比特标志位(置比特0位=加密;置比特1位=使用压缩方式6,并使用8k变化目录,否则使用4k变化目录;置比特2位=使用压缩方式6,并使用3个ShannonFano树对变化目录输出编码,否则使用2个ShannonFano树对变化目录输出编码,其它比特位未用)  
+			//(\x00\x00)
+			eb[6] = 0x06;
+			eb[7] = 0x00;
+			//8~9解压缩所需版本(\x08\x00)
+			eb[8] = 0x08;
+			eb[9] = 0x00;
+		} else {
+			eb[4] = 0x0A;
+			eb[5] = 0x00;
+			eb[6] = 0x00;
+			eb[7] = 0x00;
+			eb[8] = 0x00;
+			eb[9] = 0x00;
+		}
 		//10~11文件最后修改时间
 		eb[10] = 0x00;
 		eb[11] = 0x00;
@@ -374,6 +427,11 @@ Hzip.prototype.toEntryBuf = function(fileName,fileBuf,callback){
 			eb[i+30+fileName.length] = cfile[i];
 		}
 		callback(err,eb);
-	});
+	};
+	if(isDefRaw === false) {
+		tmpFn(null,fileBuf);
+	} else {
+		zlib.deflateRaw(fileBuf,tmpFn);
+	}
 };
 module.exports = Hzip;

@@ -1,12 +1,12 @@
 {
-    "author": "sail",
-    "homepage": "",
+    "author": "sail 黄智勇",
+    "homepage": "https://gitcafe.com/sail/hzip.git",
     "bugs": {
-        "url": "",
-        "email": "sailnode@gmail.com"
+        "url": "https://gitcafe.com/sail/hzip.git",
+        "email": "151263555@qq.com"
     },
     "name": "hzip",
-    "version": "0.0.1",
+    "version": "1.0.1",
     "main": "hzip.js",
     "readme":"hzip",
     "description": ""
