@@ -26,6 +26,7 @@ hzip.updateEntry("testDir/中文test.txt",fs.readFileSync("./test.txt"),function
 那么,你懂的,它可以用来导入导出Excel2007或者以上的版本
 实际项目中已经在用了
 
+npm install hzip
 
 hzip.updateEntry(fileName,fileBuf,callback)
 第一个参数是文件在压缩包里面的路径,如果这个路径fileName不存在,则会自动创建这个文件夹
