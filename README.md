@@ -26,6 +26,7 @@ hzip.updateEntry("testDir/中文test.txt",fs.readFileSync("./test.txt"),function
 那么,你懂的,它可以用来导入导出Excel2007或者以上的版本
 实际项目中已经在用了
 
+安装:
 npm install hzip
 
 hzip.updateEntry(fileName,fileBuf,callback)
