@@ -1,6 +1,6 @@
 'use strict';
 
-var iconvLite = require('iconv-lite');
+var iconvLite = require('./iconv-lite');
 var Iconv;
 
 try {
