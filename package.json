@@ -6,8 +6,10 @@
         "email": "151263555@qq.com"
     },
     "name": "hzip",
-    "version": "1.0.7",
+    "version": "1.0.9",
     "main": "hzip.js",
     "readme":"hzip",
+    "license" : "MIT"
+    "engines" : {"node": ">=0.10 <=0.12"},
     "description": ""
 }
