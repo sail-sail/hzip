@@ -1,15 +1,19 @@
 {
     "author": "sail 黄智勇",
-    "homepage": "https://gitcafe.com/sail/hzip.git",
+    "homepage": "https://git.oschina.net/ccteams/hzip",
     "bugs": {
-        "url": "https://gitcafe.com/sail/hzip.git",
+        "url": "https://git.oschina.net/ccteams/hzip/issues",
         "email": "151263555@qq.com"
     },
     "name": "hzip",
     "version": "1.0.9",
     "main": "hzip.js",
     "readme":"hzip",
-    "license" : "MIT"
+    "license" : "MIT",
+    "repository" : {
+        "type": "git",
+        "url": "https://git.oschina.net/ccteams/hzip.git"
+	},
     "engines" : {"node": ">=0.10 <=0.12"},
-    "description": ""
+    "description": "hzip 定向压缩或者解压缩ZIP文件"
 }
